@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FL!P 牌卡互動系統 v2 - 待選功能</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --accent-color: #333;
+            --shadow-color: rgba(0, 0, 0, 0.1);
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, "Microsoft JhengHei";
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        /* 待選區樣式 */
+        .selection-area {
+            width: 100%;
+            max-width: 1200px;
+            background: #fff;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 15px var(--shadow-color);
+            margin-bottom: 30px;
+            min-height: 120px;
+            border: 2px dashed #b2dfdb;
+        }
+        .selection-area h2 {
+            margin-top: 0;
+            font-size: 1.2rem;
+            color: #00796b;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .selection-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: flex-start;
+        }
+
+        /* 分頁切換按鈕 */
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            background: #fff;
+            padding: 8px;
+            border-radius: 50px;
+            box-shadow: 0 2px 8px var(--shadow-color);
+        }
+        .tab-btn {
+            padding: 10px 25px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 40px;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+        .tab-btn.active {
+            background: #00796b;
+            color: #fff;
+        }
+
+        /* 卡片容器 */
+        .card-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        /* 卡片結構 */
+        .flip-card {
+            background-color: transparent;
+            width: 160px;
+            height: 230px;
+            perspective: 1000px;
+            position: relative;
+        }
+        .flip-card-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            text-align: center;
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+            cursor: pointer;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px var(--shadow-color);
+        }
+        .flip-card.flipped .flip-card-inner {
+            transform: rotateY(180deg);
+        }
+        .card-front, .card-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+            box-sizing: border-box;
+            border-radius: 12px;
+            border: 4px solid;
+            background: #fff;
+        }
+        .card-back {
+            transform: rotateY(180deg);
+        }
+
+        /* 按鈕樣式 (加號與叉號) */
+        .action-btn {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+        .action-btn:hover { transform: scale(1.15); }
+        .add-btn { background-color: #43a047; }
+        .remove-btn { background-color: #e53935; }
+
+        /* 卡片文字細節 */
+        .card-id { font-size: 10px; opacity: 0.5; margin-bottom: 8px; font-weight: bold; }
+        .card-title { font-size: 17px; font-weight: 900; line-height: 1.3; margin-bottom: 8px; }
+        .card-en { font-size: 11px; color: #888; font-style: italic; line-height: 1.2; }
+
+        @media (max-width: 600px) {
+            .flip-card { width: 145px; height: 210px; }
+            .card-title { font-size: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="selection-area">
+        <h2>
+            我的精選待選區 (已選: <span id="select-count">0</span>)
+            <button onclick="clearSelection()" style="font-size: 12px; cursor: pointer; padding: 5px 12px; border-radius: 5px; border: 1px solid #ccc; background: #fff;">全部清空</button>
+        </h2>
+        <div id="selection-grid" class="selection-grid">
+            </div>
+    </div>
+
+    <div class="tabs">
+        <button id="btn-back" class="tab-btn active" onclick="switchTab('back')">背面觀 (陰影面起手)</button>
+        <button id="btn-front" class="tab-btn" onclick="switchTab('front')">正面觀 (優勢面起手)</button>
+    </div>
+
+    <div id="main-pool" class="card-container">
+        </div>
+
+    <script>
+        // 牌卡數據庫 (50組)
+        const cardData = [
+            {"f_id": 1, "f_text": "自信地表達自己", "f_en": "I express myself confidently", "b_id": 67, "b_text": "硬銷自己的意見", "b_en": "I force my opinion on others", "color": "#e57373"},
+            {"f_id": 2, "f_text": "貫徹始終", "f_en": "I'm steady and consistent", "b_id": 68, "b_text": "缺乏應變能力", "b_en": "I lack flexibility", "color": "#e57373"},
+            {"f_id": 3, "f_text": "信守承諾或規則", "f_en": "I'm reliable", "b_id": 70, "b_text": "不喜歡標新立異", "b_en": "I dislike doing things in a new way", "color": "#e57373"},
+            {"f_id": 4, "f_text": "優秀的領導者", "f_en": "I'm a good leader", "b_id": 65, "b_text": "嘗試主導一切", "b_en": "I try to be dominant", "color": "#e57373"},
+            {"f_id": 5, "f_text": "意志堅定", "f_en": "I have strong will", "b_id": 61, "b_text": "固執", "b_en": "I'm stubborn", "color": "#e57373"},
+            {"f_id": 6, "f_text": "有自信", "f_en": "I'm confident", "b_id": 63, "b_text": "不聽他人意見", "b_en": "I do not listen to the opinions of others", "color": "#e57373"},
+            {"f_id": 7, "f_text": "善於找到改進的方法", "f_en": "I'm good at finding ways to improve things", "b_id": 66, "b_text": "批判性強烈", "b_en": "I'm critical", "color": "#e57373"},
+            {"f_id": 8, "f_text": "責任感強", "f_en": "I have a strong sense of responsibility", "b_id": 62, "b_text": "因責任而承受壓力", "b_en": "I'm stressed out by responsibility", "color": "#e57373"},
+            {"f_id": 9, "f_text": "善於組織", "f_en": "I'm good at organizing", "b_id": 64, "b_text": "難以容忍雜亂無章", "b_en": "I can't stand being disorganized", "color": "#e57373"},
+            {"f_id": 10, "f_text": "善於自制", "f_en": "I have self control", "b_id": 69, "b_text": "支配慾望強烈", "b_en": "I try to control others", "color": "#e57373"},
+            {"f_id": 11, "f_text": "對別人感同身受", "f_en": "I empathize with others", "b_id": 83, "b_text": "過於大方", "b_en": "I'm too generous", "color": "#ffb74d"},
+            {"f_id": 12, "f_text": "待人親切", "f_en": "I'm kind to other people", "b_id": 85, "b_text": "為討好他人而費心", "b_en": "I try too hard to be kind to others", "color": "#ffb74d"},
+            {"f_id": 13, "f_text": "有顆溫暖的心", "f_en": "I have a warm heart", "b_id": 81, "b_text": "提供過多協助或意見", "b_en": "I give excessive help or advice to others", "color": "#ffb74d"},
+            {"f_id": 14, "f_text": "善於帶動氣氛", "f_en": "I'm good at lightening the mood", "b_id": 86, "b_text": "易因尷尬氣氛而感到難受", "b_en": "I feel uncomfortable with awkward situations", "color": "#ffb74d"},
+            {"f_id": 15, "f_text": "待人忠誠", "f_en": "I'm loyal", "b_id": 84, "b_text": "過於重視關係", "b_en": "I'm overly relationship-oriented", "color": "#ffb74d"},
+            {"f_id": 16, "f_text": "善於讚賞", "f_en": "I'm good at giving compliments", "b_id": 90, "b_text": "不擅於說出傷人真相", "b_en": "I'm not good at speaking hurtful truths", "color": "#ffb74d"},
+            {"f_id": 17, "f_text": "重視情感關係", "f_en": "I value emotional relationship", "b_id": 82, "b_text": "容易因關係而受傷", "b_en": "I often get hurt in relationships", "color": "#ffb74d"},
+            {"f_id": 18, "f_text": "會感激別人的欣賞鼓勵", "f_en": "I appreciate compliments and encouragement", "b_id": 87, "b_text": "為得到認同而費心", "b_en": "I try too hard to get recognition from others", "color": "#ffb74d"},
+            {"f_id": 19, "f_text": "優先考慮他人", "f_en": "I put others first", "b_id": 88, "b_text": "易在關係中吃虧", "b_en": "I'm self-sacrificing", "color": "#ffb74d"},
+            {"f_id": 20, "f_text": "善於助人", "f_en": "I'm good at helping others", "b_id": 89, "b_text": "難以拒絕別人", "b_en": "I have difficulty saying no", "color": "#ffb74d"},
+            {"f_id": 21, "f_text": "能做分析性思考", "f_en": "I can think analytically", "b_id": 53, "b_text": "缺乏想像力", "b_en": "I lack imagination", "color": "#64b5f6"},
+            {"f_id": 22, "f_text": "做事高標準", "f_en": "I do things to a high standard", "b_id": 51, "b_text": "工作狂", "b_en": "I'm workaholic", "color": "#64b5f6"},
+            {"f_id": 23, "f_text": "能做出客觀判斷", "f_en": "I can judge objectively", "b_id": 57, "b_text": "只著眼客觀資料", "b_en": "I value only facts", "color": "#64b5f6"},
+            {"f_id": 24, "f_text": "工作有效率", "f_en": "I work efficiently", "b_id": 55, "b_text": "優先考量自己利益", "b_en": "I think in terms of what I can gain", "color": "#64b5f6"},
+            {"f_id": 25, "f_text": "能夠獨立工作", "f_en": "I can work independently", "b_id": 56, "b_text": "不喜歡與人合作", "b_en": "I try to work alone", "color": "#64b5f6"},
+            {"f_id": 26, "f_text": "做好充分準備", "f_en": "I'm well prepared", "b_id": 52, "b_text": "過於執著既定計畫", "b_en": "I'm obsessed with planning", "color": "#64b5f6"},
+            {"f_id": 27, "f_text": "不易受情感影響", "f_en": "I'm not very emotional", "b_id": 59, "b_text": "難以覺察別人感受", "b_en": "I'm insensitive to other people's feelings", "color": "#64b5f6"},
+            {"f_id": 28, "f_text": "理性行事", "f_en": "I act rationally", "b_id": 60, "b_text": "待人冷漠", "b_en": "I'm cold to others", "color": "#64b5f6"},
+            {"f_id": 29, "f_text": "沉著冷靜", "f_en": "I'm calm", "b_id": 58, "b_text": "欠缺幽默感", "b_en": "I do not have a sense of humor", "color": "#64b5f6"},
+            {"f_id": 30, "f_text": "行動前會認真分析", "f_en": "I think deeply first and then act", "b_id": 54, "b_text": "花很多時間做決定", "b_en": "I take too much time to make decisions", "color": "#64b5f6"},
+            {"f_id": 31, "f_text": "勇於嘗試新事物", "f_en": "I'm good at trying new things", "b_id": 97, "b_text": "容易失去興趣", "b_en": "I easily lose interest", "color": "#9575cd"},
+            {"f_id": 32, "f_text": "享受自我挑戰", "f_en": "I enjoy challenging myself", "b_id": 100, "b_text": "行動前缺乏深思", "b_en": "I act without thinking", "color": "#9575cd"},
+            {"f_id": 33, "f_text": "專注做好自己喜愛的事", "f_en": "I'm easily absorbed in what I like", "b_id": 95, "b_text": "只著眼於自己喜愛的事", "b_en": "I'm interested in only what I like", "color": "#9575cd"},
+            {"f_id": 34, "f_text": "積極地面對新事物", "f_en": "I'm energetic", "b_id": 91, "b_text": "容易感到沉悶", "b_en": "I'm easily bored", "color": "#9575cd"},
+            {"f_id": 35, "f_text": "好惡分明", "f_en": "I know my likes and dislikes", "b_id": 94, "b_text": "性格獨特", "b_en": "I have a unique personality", "color": "#9575cd"},
+            {"f_id": 36, "f_text": "追求自由", "f_en": "I pursue freedom", "b_id": 98, "b_text": "不喜歡受人控制", "b_en": "I dislike being controlled", "color": "#9575cd"},
+            {"f_id": 37, "f_text": "應對快速", "f_en": "I react quickly", "b_id": 99, "b_text": "做事前不考量", "b_en": "I do not ponder", "color": "#9575cd"},
+            {"f_id": 38, "f_text": "善於表達情感", "f_en": "I express my feelings well", "b_id": 93, "b_text": "難以控制情緒", "b_en": "I have difficulty controlling my emotion", "color": "#9575cd"},
+            {"f_id": 39, "f_text": "善於創意思考", "f_en": "I'm good at creative thinking", "b_id": 96, "b_text": "常做白日夢", "b_en": "I often daydream", "color": "#9575cd"},
+            {"f_id": 40, "f_text": "享受改變", "f_en": "I enjoy changes", "b_id": 92, "b_text": "缺乏一致性", "b_en": "I lack consistency", "color": "#9575cd"},
+            {"f_id": 41, "f_text": "善於與別人協作", "f_en": "I'm good at cooperating", "b_id": 73, "b_text": "不強烈維護自身主張", "b_en": "I do not strongly assert my opinions", "color": "#81c784"},
+            {"f_id": 42, "f_text": "努力維持良好關係", "f_en": "I try to keep good relations with others", "b_id": 77, "b_text": "逃避衝突", "b_en": "I avoid conflict", "color": "#81c784"},
+            {"f_id": 43, "f_text": "聆聽及考量他人意見", "f_en": "I consider other people's opinions", "b_id": 80, "b_text": "依賴他人", "b_en": "I'm dependent on others", "color": "#81c784"},
+            {"f_id": 44, "f_text": "謙虛不自誇", "f_en": "I'm humble", "b_id": 71, "b_text": "缺乏自信", "b_en": "I lack confidence", "color": "#81c784"},
+            {"f_id": 45, "f_text": "小心行事", "f_en": "I act carefully", "b_id": 78, "b_text": "猜疑心重", "b_en": "I'm suspicious", "color": "#81c784"},
+            {"f_id": 46, "f_text": "不會犯嚴重過錯", "f_en": "I do not make big mistakes", "b_id": 75, "b_text": "糾結於犯錯的可能", "b_en": "I obsess over what could go wrong", "color": "#81c784"},
+            {"f_id": 47, "f_text": "體貼有禮", "f_en": "I'm polite", "b_id": 79, "b_text": "太在意別人的想法", "b_en": "I care too much about what other people think", "color": "#81c784"},
+            {"f_id": 48, "f_text": "善於忍耐", "f_en": "I'm patient", "b_id": 72, "b_text": "壓抑自我需要", "b_en": "I suppress what I want to do", "color": "#81c784"},
+            {"f_id": 49, "f_text": "待人溫柔", "f_en": "I'm mild", "b_id": 74, "b_text": "害羞", "b_en": "I'm shy", "color": "#81c784"},
+            {"f_id": 50, "f_text": "避免衝突與傷害別人", "f_en": "I do not harm others", "b_id": 76, "b_text": "擔心引人注目", "b_en": "I try not to stand out", "color": "#81c784"}
+        ];
+
+        let selectedIds = new Set();
+        let currentMode = 'back'; // 'back' (背面起手) 或 'front' (正面起手)
+
+        // 初始化渲染主牌庫
+        function renderPool() {
+            const pool = document.getElementById('main-pool');
+            pool.innerHTML = '';
+            
+            // 根據模式排序
+            const sortedData = [...cardData].sort((a, b) => {
+                return currentMode === 'back' ? a.b_id - b.b_id : a.f_id - b.f_id;
+            });
+
+            sortedData.forEach(item => {
+                const cardWrapper = document.createElement('div');
+                cardWrapper.className = 'flip-card';
+                cardWrapper.id = `pool-card-${item.f_id}`;
+                
+                const addBtn = document.createElement('button');
+                addBtn.className = 'action-btn add-btn';
+                addBtn.innerHTML = '+';
+                addBtn.title = "加入精選";
+                addBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    addToSelection(item.f_id);
+                };
+                
+                cardWrapper.appendChild(addBtn);
+                cardWrapper.appendChild(createCardInner(item));
+                pool.appendChild(cardWrapper);
+            });
+        }
+
+        // 創建卡片內層 HTML (含正反面內容)
+        function createCardInner(item) {
+            const inner = document.createElement('div');
+            inner.className = 'flip-card-inner';
+            inner.onclick = () => {
+                inner.parentElement.classList.toggle('flipped');
+            };
+
+            const front = document.createElement('div');
+            front.className = 'card-front';
+            
+            const back = document.createElement('div');
+            back.className = 'card-back';
+
+            if (currentMode === 'back') {
+                // 背面(陰影)起手
+                front.style.borderColor = '#999';
+                front.innerHTML = `
+                    <div class="card-id">#${item.b_id}</div>
+                    <div class="card-title">${item.b_text}</div>
+                    <div class="card-en">${item.b_en}</div>
+                `;
+                back.style.borderColor = item.color;
+                back.innerHTML = `
+                    <div class="card-id">#${item.f_id}</div>
+                    <div class="card-title" style="color:${item.color}">${item.f_text}</div>
+                    <div class="card-en">${item.f_en}</div>
+                `;
+            } else {
+                // 正面(優勢)起手
+                front.style.borderColor = item.color;
+                front.innerHTML = `
+                    <div class="card-id">#${item.f_id}</div>
+                    <div class="card-title" style="color:${item.color}">${item.f_text}</div>
+                    <div class="card-en">${item.f_en}</div>
+                `;
+                back.style.borderColor = '#999';
+                back.innerHTML = `
+                    <div class="card-id">#${item.b_id}</div>
+                    <div class="card-title">${item.b_text}</div>
+                    <div class="card-en">${item.b_en}</div>
+                `;
+            }
+
+            inner.appendChild(front);
+            inner.appendChild(back);
+            return inner;
+        }
+
+        // 加入待選區邏輯
+        function addToSelection(fId) {
+            if (selectedIds.has(fId)) return;
+            selectedIds.add(fId);
+            renderSelection();
+        }
+
+        // 從待選區移除邏輯
+        function removeFromSelection(fId) {
+            selectedIds.delete(fId);
+            renderSelection();
+        }
+
+        // 清空待選區
+        function clearSelection() {
+            if (confirm("確定要清空所有精選卡片嗎？")) {
+                selectedIds.clear();
+                renderSelection();
+            }
+        }
+
+        // 渲染待選區
+        function renderSelection() {
+            const grid = document.getElementById('selection-grid');
+            const countLabel = document.getElementById('select-count');
+            grid.innerHTML = '';
+            countLabel.innerText = selectedIds.size;
+
+            selectedIds.forEach(fId => {
+                const item = cardData.find(d => d.f_id === fId);
+                const cardWrapper = document.createElement('div');
+                cardWrapper.className = 'flip-card';
+                
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'action-btn remove-btn';
+                removeBtn.innerHTML = '×';
+                removeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    removeFromSelection(fId);
+                };
+                
+                cardWrapper.appendChild(removeBtn);
+                cardWrapper.appendChild(createCardInner(item));
+                grid.appendChild(cardWrapper);
+            });
+        }
+
+        // 切換分頁觀點
+        function switchTab(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`btn-${mode}`).classList.add('active');
+            
+            renderPool();
+            renderSelection(); 
+        }
+
+        // 啟動系統
+        renderPool();
+    </script>
+</body>
+</html>
